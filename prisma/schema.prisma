@@ -1,0 +1,239 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Customer {
+  id        String    @id
+  email     String    @unique
+  phone     String    @unique
+  firstName String
+  lastName  String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  consents  Consent[]
+  sessions  Session[]
+  orders    Order[]
+  carts     Cart[]
+}
+
+model Consent {
+  id            String    @id
+  customerId    String
+  channel       String    // EMAIL, SMS
+  status        String    // OPT_IN, OPT_OUT
+  source        String    // CHECKOUT_CHECKBOX, ACCOUNT_SETTINGS, SMS_REPLY_STOP, EMAIL_FOOTER
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  createdAt     DateTime  @default(now())
+
+  customer      Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, channel, effectiveFrom])
+}
+
+model Session {
+  id         String    @id
+  customerId String
+  deviceType String    // DESKTOP, MOBILE, TABLET
+  browser    String    // CHROME, SAFARI, FIREFOX, EDGE
+  ipAddress  String
+  startedAt  DateTime
+  endedAt    DateTime?
+  createdAt  DateTime  @default(now())
+
+  customer   Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  carts      Cart[]
+
+  @@index([customerId])
+}
+
+model Cart {
+  id             String            @id
+  sessionId      String
+  customerId     String
+  status         String            // ACTIVE, ABANDONED, RECOVERED, CONVERTED_EXTERNAL, EXPIRED
+  subtotal       Float
+  taxTotal       Float
+  grandTotal     Float
+  currency       String            @default("USD")
+  itemCount      Int
+  lastActivityAt DateTime
+  abandonedAt    DateTime?
+  recoveredAt    DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  session        Session           @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  customer       Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  lines          CartLine[]
+  messages       MessageInstance[]
+  orders         Order[]
+
+  @@index([customerId])
+  @@index([status])
+  @@index([lastActivityAt])
+}
+
+model CartLine {
+  id        String   @id
+  cartId    String
+  sku       String
+  title     String
+  price     Float
+  quantity  Int
+  lineTotal Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+
+  @@index([cartId])
+}
+
+model Campaign {
+  id                  String            @id
+  name                String            // "Email Reminder", "SMS Reminder", "Email Discount Recovery"
+  channel             String            // EMAIL, SMS
+  description         String
+  triggerDelayMinutes Int
+  isActive            Boolean           @default(true)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  templates           MessageTemplate[]
+}
+
+model MessageTemplate {
+  id                   String            @id
+  campaignId           String
+  variant              String            // A, B
+  subject              String?
+  body                 String
+  offerDiscountPercent Int               @default(0)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  campaign             Campaign          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  messages             MessageInstance[]
+
+  @@index([campaignId])
+}
+
+model MessageInstance {
+  id                String          @id // MSG-CART-YYYY-XXXXXX-NN
+  cartId            String
+  templateId        String
+  scheduledAt       DateTime
+  eligibilityStatus String          // ELIGIBLE, NO_CONSENT, OPTED_OUT, CONSENT_EXPIRED, FREQUENCY_CAPPED, ALREADY_PURCHASED, NOT_ABANDONED, OTHER_SUPPRESSED
+  suppressionReason String?
+  evaluatedAt       DateTime
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  cart              Cart            @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  template          MessageTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  sendAttempts      SendAttempt[]
+
+  @@unique([cartId, templateId, scheduledAt])
+  @@index([cartId])
+  @@index([templateId])
+  @@index([eligibilityStatus])
+}
+
+model SendAttempt {
+  id                String         @id
+  messageInstanceId String
+  status            String         // Derived latest status: SENT, DELIVERED, OPENED, CLICKED, BOUNCED, FAILED, SUPPRESSED
+  sentAt            DateTime?
+  deliveredAt       DateTime?
+  openedAt          DateTime?
+  clickedAt         DateTime?
+  failedReason      String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  messageInstance   MessageInstance @relation(fields: [messageInstanceId], references: [id], onDelete: Cascade)
+  events            SendEvent[]
+  attributions      Attribution[]
+
+  @@index([messageInstanceId])
+  @@index([status])
+  @@index([sentAt])
+}
+
+model SendEvent {
+  id            String      @id // EVT-2026-000001
+  sendAttemptId String
+  eventType     String      // SENT, DELIVERED, OPENED, CLICKED, BOUNCED, FAILED, SUPPRESSED
+  occurredAt    DateTime
+  metadata      String?
+  createdAt     DateTime    @default(now())
+
+  sendAttempt   SendAttempt @relation(fields: [sendAttemptId], references: [id], onDelete: Cascade)
+
+  @@index([sendAttemptId])
+  @@index([eventType])
+  @@index([occurredAt])
+}
+
+model Order {
+  id          String        @id
+  cartId      String?
+  customerId  String
+  orderNumber String        @unique
+  subtotal    Float
+  taxTotal    Float
+  total       Float
+  currency    String        @default("USD")
+  status      String        // COMPLETED, REFUNDED, CANCELLED
+  purchasedAt DateTime
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  customer    Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  cart        Cart?         @relation(fields: [cartId], references: [id], onDelete: SetNull)
+  attributions Attribution[]
+
+  @@index([customerId])
+  @@index([cartId])
+  @@index([purchasedAt])
+}
+
+model Attribution {
+  id                     String      @id
+  orderId                String
+  sendAttemptId          String
+  attributionReason      String      // LAST_CLICKED_SEND, LAST_DELIVERED_SEND, DOUBLE_COUNTED_ANOMALY
+  attributionWindowHours Float
+  attributedRevenue      Float
+  attributedAt           DateTime
+  isAnomaly              Boolean     @default(false)
+  createdAt              DateTime    @default(now())
+
+  order                  Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  sendAttempt            SendAttempt @relation(fields: [sendAttemptId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([sendAttemptId])
+}
+
+model GroundTruthIssue {
+  id                String   @id
+  issueType         String   // MESSAGE_SENT_AFTER_OPTOUT, CART_CLASSIFIED_ABANDONED_AFTER_PURCHASE, DOUBLE_COUNTED_ATTRIBUTION, CART_TOTAL_STALE_AFTER_QUANTITY_UPDATE
+  severity          String   // CRITICAL, HIGH, MEDIUM, LOW
+  relatedEntityType String   // CART, MESSAGE_INSTANCE, SEND_ATTEMPT, ORDER, ATTRIBUTION
+  relatedEntityId   String
+  expectedDecision  String
+  observedState     String
+  description       String
+  createdAt         DateTime @default(now())
+
+  @@index([issueType])
+  @@index([relatedEntityId])
+}

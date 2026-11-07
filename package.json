@@ -1,0 +1,46 @@
+{
+  "name": "cart-recovery-control-center",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:migrate": "prisma migrate dev --name init",
+    "db:push": "prisma db push",
+    "db:generate": "prisma generate",
+    "seed:starter": "tsx prisma/seed.ts --scale starter",
+    "seed:full": "tsx prisma/seed.ts --scale full",
+    "validate": "tsx scripts/validate-data.ts",
+    "export": "tsx scripts/export-data.ts",
+    "verify:reproducibility": "tsx scripts/verify-reproducibility.ts"
+  },
+  "dependencies": {
+    "@faker-js/faker": "9.2.0",
+    "@prisma/client": "5.21.1",
+    "clsx": "2.1.1",
+    "lucide-react": "0.454.0",
+    "next": "14.2.15",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "recharts": "2.13.0",
+    "tailwind-merge": "2.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "20.17.0",
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "autoprefixer": "10.4.20",
+    "eslint": "8.57.0",
+    "eslint-config-next": "14.2.15",
+    "postcss": "8.4.47",
+    "prisma": "5.21.1",
+    "tailwindcss": "3.4.14",
+    "tsx": "4.19.2",
+    "typescript": "5.6.3",
+    "vitest": "2.1.4"
+  }
+}
